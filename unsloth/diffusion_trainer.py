@@ -161,6 +161,36 @@ class DiffusionTrainingArguments(TrainingArguments):
         default=250,
         metadata={"help": "Number of training steps per cluster before rotating."},
     )
+    # Sequence length & formatting
+    max_seq_length: int = field(
+        default=2048,
+        metadata={"help": "Maximum sequence length for tokenization and canvas packing."},
+    )
+    dataset_text_field: Optional[str] = field(
+        default="text",
+        metadata={"help": "The dataset field containing the text."},
+    )
+    packing: bool = field(
+        default=False,
+        metadata={"help": "Whether to pack multiple sequences into a single canvas."},
+    )
+
+    def __init__(self, *args, **kwargs):
+        if args:
+            kwargs["output_dir"] = args[0]
+            args = args[1:]
+        import dataclasses
+        base_fields = {f.name for f in dataclasses.fields(TrainingArguments)}
+        derived_fields = {f.name for f in dataclasses.fields(self.__class__)}
+        for k, v in list(kwargs.items()):
+            if k in derived_fields:
+                setattr(self, k, v)
+            elif k not in base_fields:
+                setattr(self, k, kwargs.pop(k))
+        super_kwargs = {k: v for k, v in kwargs.items() if k in base_fields}
+        if "output_dir" not in super_kwargs:
+            super_kwargs["output_dir"] = "./diffusion_outputs"
+        super().__init__(*args, **super_kwargs)
 
 
 class DiffusionTrainer(Trainer):
