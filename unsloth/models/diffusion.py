@@ -21,6 +21,16 @@ import os
 import torch
 from transformers import AutoConfig, AutoProcessor, AutoTokenizer
 from unsloth_zoo.hf_utils import add_dtype_kwargs
+try:
+    from unsloth_zoo.utils import _get_dtype
+except ImportError:
+    def _get_dtype(dtype, default = None):
+        _map = {
+            "float32": torch.float32, torch.float32: torch.float32,
+            "float16": torch.float16, torch.float16: torch.float16,
+            "bfloat16": torch.bfloat16, torch.bfloat16: torch.bfloat16,
+        }
+        return _map.get(dtype, default)
 
 from ._utils import is_bfloat16_supported, maybe_prefetch_hf_snapshot
 from .llama import logger
@@ -177,7 +187,7 @@ class FastDiffusionModel:
             gc.collect()
             torch.cuda.empty_cache()
 
-        dtype = _get_dtype(dtype, default = None)
+        dtype = _get_dtype(dtype)
         if dtype is None:
             dtype = torch.float16 if not SUPPORTS_BFLOAT16 else torch.bfloat16
         elif dtype == torch.bfloat16 and not SUPPORTS_BFLOAT16:
