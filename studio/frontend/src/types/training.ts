@@ -1,33 +1,25 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright 2026-present the Unsloth AI Inc. team. All rights reserved. See /studio/LICENSE.AGPL-3.0
 
-export type ModelType = "vision" | "audio" | "embeddings" | "text" | "diffusion";
-export type TrainingMethod =
-  | "qlora"
-  | "lora"
-  | "full"
-  | "cpt"
+export type ModelType = "vision" | "audio" | "embeddings" | "text";
+export type TrainingMethod = "qlora" | "lora" | "full" | "cpt";
+
+export type DiffusionTrainingMethod =
   | "diffusion_sft"
   | "diffusion_dpo"
   | "diffusion_orpo"
   | "diffusion_grpo"
   | "diffusion_kto"
-  | "diffusion_pretrain"
+  | "diffusion_pretrain";
+
+export type ExtendedTrainingMethod =
+  | TrainingMethod
+  | DiffusionTrainingMethod
   | "neuroplastic";
 
 export function isTrainingMethod(value: unknown): value is TrainingMethod {
   return (
-    value === "qlora" ||
-    value === "lora" ||
-    value === "full" ||
-    value === "cpt" ||
-    value === "diffusion_sft" ||
-    value === "diffusion_dpo" ||
-    value === "diffusion_orpo" ||
-    value === "diffusion_grpo" ||
-    value === "diffusion_kto" ||
-    value === "diffusion_pretrain" ||
-    value === "neuroplastic"
+    value === "qlora" || value === "lora" || value === "full" || value === "cpt"
   );
 }
 
@@ -35,7 +27,7 @@ export function isAdapterMethod(method: TrainingMethod): boolean {
   return method === "lora" || method === "qlora" || method === "cpt";
 }
 
-export function isDiffusionMethod(method: TrainingMethod): boolean {
+export function isDiffusionMethod(method: unknown): method is DiffusionTrainingMethod {
   return (
     method === "diffusion_sft" ||
     method === "diffusion_dpo" ||

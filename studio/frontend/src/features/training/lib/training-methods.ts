@@ -13,13 +13,6 @@ const BACKEND_TRAINING_TYPE: Record<TrainingMethod, string> = {
   lora: "LoRA/QLoRA",
   full: "Full Finetuning",
   cpt: "Continued Pretraining",
-  diffusion_sft: "Diffusion SFT",
-  diffusion_dpo: "Diffusion DPO",
-  diffusion_orpo: "Diffusion ORPO",
-  diffusion_grpo: "Diffusion GRPO",
-  diffusion_kto: "Diffusion KTO",
-  diffusion_pretrain: "Diffusion Pretrain",
-  neuroplastic: "Neuroplastic Synapses",
 };
 
 const TRAINING_METHOD_LABELS: Record<TrainingMethod, string> = {
@@ -27,13 +20,6 @@ const TRAINING_METHOD_LABELS: Record<TrainingMethod, string> = {
   lora: "LoRA",
   full: "Full",
   cpt: "CPT",
-  diffusion_sft: "Diff-SFT",
-  diffusion_dpo: "Diff-DPO",
-  diffusion_orpo: "Diff-ORPO",
-  diffusion_grpo: "Diff-GRPO",
-  diffusion_kto: "Diff-KTO",
-  diffusion_pretrain: "Diff-Pretrain",
-  neuroplastic: "Neuroplastic",
 };
 
 export function toBackendTrainingType(trainingMethod: TrainingMethod): string {

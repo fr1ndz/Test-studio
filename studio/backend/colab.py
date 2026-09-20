@@ -13,6 +13,16 @@ if _backend_dir not in sys.path:
     sys.path.insert(0, _backend_dir)
 import _platform_compat  # noqa: F401
 
+# Auto-install structlog if missing in Colab environment before loggers are imported
+try:
+    import structlog
+except ImportError:
+    import subprocess
+    try:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "structlog>=24.1.0", "--quiet"])
+        import structlog
+    except Exception:
+        pass
 
 from loggers import get_logger
 

@@ -13,7 +13,19 @@ import re
 import time
 from typing import TYPE_CHECKING
 
-import structlog
+try:
+    import structlog
+except ImportError:
+    import subprocess
+    import sys
+    try:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "structlog>=24.1.0", "--quiet"])
+        import structlog
+    except Exception as _e:
+        raise ImportError(
+            f"structlog is required by Unsloth Studio: {_e}. "
+            "Please install it using: pip install structlog"
+        ) from _e
 
 # Annotations only: a runtime import makes the ASGI stack a hard dependency of every CLI command.
 if TYPE_CHECKING:
