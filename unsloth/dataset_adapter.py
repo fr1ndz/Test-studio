@@ -212,32 +212,93 @@ class UniversalDatasetAdapter:
         self.system_prompt = system_prompt
         self.canvas_block_size = canvas_block_size
 
-    def load_raw_dataset(self, data: Any) -> Any:
-        """Load dataset from various sources (HF Dataset, Hub ID, local path, dict, list)."""
-        from datasets import Dataset, DatasetDict, load_dataset
+    def load_raw_dataset(
+        self,
+        data: Any,
+        split: Optional[str] = None,
+        subset: Optional[str] = None,
+        token: Optional[str] = None,
+        trust_remote_code: bool = True,
+    ) -> Any:
+        """
+        Load dataset from various sources (HF Dataset, Hub ID, local path/glob, dict, list)
+        with robust fallback for missing splits, custom scripts, and subsets.
+        """
+        from datasets import Dataset, DatasetDict, get_dataset_split_names, load_dataset
+        from datasets.exceptions import DatasetGenerationError
 
         if isinstance(data, (Dataset, DatasetDict)):
             return data
 
         if isinstance(data, str):
-            # Check if local file
+            # 1. Check if local file or directory
             if os.path.isfile(data):
                 ext = os.path.splitext(data)[-1].lower()
                 if ext in (".json", ".jsonl"):
-                    return load_dataset("json", data_files=data, split="train")
+                    return load_dataset("json", data_files=data, split=split or "train")
                 elif ext in (".csv", ".tsv"):
                     delimiter = "\t" if ext == ".tsv" else ","
-                    return load_dataset("csv", data_files=data, delimiter=delimiter, split="train")
+                    return load_dataset("csv", data_files=data, delimiter=delimiter, split=split or "train")
                 elif ext == ".parquet":
-                    return load_dataset("parquet", data_files=data, split="train")
+                    return load_dataset("parquet", data_files=data, split=split or "train")
                 elif ext == ".txt":
-                    return load_dataset("text", data_files=data, split="train")
+                    return load_dataset("text", data_files=data, split=split or "train")
                 else:
                     raise ValueError(f"Unsupported file format: {ext}")
-            else:
-                # Assume Hugging Face Hub dataset repo ID
-                logger.info(f"Loading dataset from HuggingFace Hub: {data}")
-                return load_dataset(data, split="train")
+
+            # 2. Check if glob pattern or directory
+            import glob
+            matched_files = glob.glob(data)
+            if matched_files and all(os.path.isfile(f) for f in matched_files):
+                ext = os.path.splitext(matched_files[0])[-1].lower()
+                loader_type = "json" if ext in (".json", ".jsonl") else ("parquet" if ext == ".parquet" else "text")
+                return load_dataset(loader_type, data_files=matched_files, split=split or "train")
+
+            # 3. Assume Hugging Face Hub dataset repo ID
+            logger.info(f"Loading dataset from HuggingFace Hub: {data} (split={split or 'auto'})")
+            load_kwargs: Dict[str, Any] = {
+                "path": data,
+                "trust_remote_code": trust_remote_code,
+            }
+            if subset:
+                load_kwargs["name"] = subset
+            if token:
+                load_kwargs["token"] = token
+
+            # Try requested split, or 'train', or auto-detect available split
+            target_split = split or "train"
+            try:
+                return load_dataset(**load_kwargs, split=target_split)
+            except (KeyError, ValueError, DatasetGenerationError) as e:
+                err_msg = str(e)
+                # Attempt to discover available splits if target_split was not found
+                try:
+                    available_splits = get_dataset_split_names(
+                        data,
+                        config_name=subset,
+                        token=token,
+                        trust_remote_code=trust_remote_code,
+                    )
+                    if available_splits and target_split not in available_splits:
+                        fallback_split = available_splits[0]
+                        logger.warning(
+                            f"Split '{target_split}' not found in dataset '{data}'. "
+                            f"Available splits: {available_splits}. Falling back to '{fallback_split}'."
+                        )
+                        return load_dataset(**load_kwargs, split=fallback_split)
+                except Exception:
+                    pass
+
+                # If still failing, provide comprehensive diagnostics
+                raise RuntimeError(
+                    f"Failed to load dataset '{data}'.\n"
+                    f"Common causes:\n"
+                    f" 1. Gated dataset: provide `token='hf_...'`.\n"
+                    f" 2. Custom script: ensure `trust_remote_code=True` (already set).\n"
+                    f" 3. Subset needed: specify `subset='...'` if dataset has multiple configs.\n"
+                    f" 4. Split mismatch: specify `split='...'` if 'train' split does not exist.\n"
+                    f"Original error: {err_msg}"
+                ) from e
 
         if isinstance(data, list):
             return Dataset.from_list(data)
@@ -255,17 +316,28 @@ class UniversalDatasetAdapter:
 
         raise TypeError(f"Cannot load dataset of type {type(data)}")
 
+
     def adapt(
         self,
         dataset: Any,
         formatting_func: Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = None,
         num_proc: Optional[int] = None,
         batched: bool = False,
+        split: Optional[str] = None,
+        subset: Optional[str] = None,
+        token: Optional[str] = None,
+        trust_remote_code: bool = True,
     ) -> Any:
         """
         Main entry point: adapts any dataset to the target training method.
         """
-        raw_ds = self.load_raw_dataset(dataset)
+        raw_ds = self.load_raw_dataset(
+            dataset,
+            split=split,
+            subset=subset,
+            token=token,
+            trust_remote_code=trust_remote_code,
+        )
 
         # If custom formatting_func provided, apply it first
         if formatting_func is not None:

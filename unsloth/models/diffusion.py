@@ -430,9 +430,13 @@ class FastDiffusionModel:
             target_method = method,
             max_length = max_length,
             canvas_block_size = canvas_block_size,
+        )
+        return adapter.adapt(
+            dataset,
+            formatting_func = formatting_func,
+            num_proc = num_proc,
             **kwargs,
         )
-        return adapter.adapt(dataset, formatting_func = formatting_func, num_proc = num_proc)
 
     @staticmethod
     def get_trainer(
