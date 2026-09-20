@@ -4416,27 +4416,41 @@ class UnslothTrainer:
                             f"master weights offloaded to pinned CPU memory).\n"
                         )
 
-                    diff_args = DiffusionTrainingArguments(
-                        output_dir = output_dir,
-                        per_device_train_batch_size = config_args.get("per_device_train_batch_size", 1),
-                        gradient_accumulation_steps = config_args.get("gradient_accumulation_steps", 8),
-                        learning_rate = lr_value,
-                        optim = "paged_adamw_8bit",
-                        gradient_checkpointing = True,
-                        gradient_checkpointing_kwargs = {"use_reentrant": False},
-                        weight_decay = training_args.get("weight_decay", 0.001),
-                        seed = training_args.get("random_seed", 3407),
-                        fp16 = not is_bfloat16_supported(),
-                        bf16 = is_bfloat16_supported(),
-                        logging_steps = 1,
-                        report_to = _build_report_targets(training_args),
-                        disable_tqdm = _hf_stdout_progress_disabled(),
-                        max_seq_length = training_args.get("max_seq_length", 2048),
-                        canvas_block_size = training_args.get("canvas_block_size", 256),
-                        moe_active_training = moe_active,
-                        moe_num_clusters = moe_clusters,
-                        moe_cluster_switch_steps = moe_switch_steps,
-                    )
+                    import inspect
+                    diff_init_params = inspect.signature(DiffusionTrainingArguments.__init__).parameters
+                    has_var_kwargs = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in diff_init_params.values())
+
+                    diff_kwargs = {
+                        "output_dir": output_dir,
+                        "per_device_train_batch_size": config_args.get("per_device_train_batch_size", 1),
+                        "gradient_accumulation_steps": config_args.get("gradient_accumulation_steps", 8),
+                        "learning_rate": lr_value,
+                        "optim": "paged_adamw_8bit",
+                        "gradient_checkpointing": True,
+                        "gradient_checkpointing_kwargs": {"use_reentrant": False},
+                        "weight_decay": training_args.get("weight_decay", 0.001),
+                        "seed": training_args.get("random_seed", 3407),
+                        "fp16": not is_bfloat16_supported(),
+                        "bf16": is_bfloat16_supported(),
+                        "logging_steps": 1,
+                        "report_to": _build_report_targets(training_args),
+                        "disable_tqdm": _hf_stdout_progress_disabled(),
+                    }
+                    extra_diff_fields = {
+                        "max_seq_length": training_args.get("max_seq_length", 2048),
+                        "canvas_block_size": training_args.get("canvas_block_size", 256),
+                        "moe_active_training": moe_active,
+                        "moe_num_clusters": moe_clusters,
+                        "moe_cluster_switch_steps": moe_switch_steps,
+                    }
+                    for k, v in extra_diff_fields.items():
+                        if has_var_kwargs or k in diff_init_params:
+                            diff_kwargs[k] = v
+
+                    diff_args = DiffusionTrainingArguments(**diff_kwargs)
+                    for k, v in extra_diff_fields.items():
+                        setattr(diff_args, k, v)
+
                     if max_steps_val and max_steps_val > 0:
                         diff_args.max_steps = max_steps_val
                     else:

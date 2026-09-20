@@ -589,11 +589,21 @@ class FastDiffusionModel:
         from ..diffusion_trainer import DiffusionTrainer, DiffusionTrainingArguments
 
         if training_args is None:
-            training_args = DiffusionTrainingArguments(
-                output_dir = kwargs.pop("output_dir", "./diffusion_outputs"),
-                training_method = method,
-                **kwargs,
-            )
+            import inspect
+            diff_params = inspect.signature(DiffusionTrainingArguments.__init__).parameters
+            has_var_kwargs = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in diff_params.values())
+
+            output_dir = kwargs.pop("output_dir", "./diffusion_outputs")
+            init_kwargs = {"output_dir": output_dir, "training_method": method}
+            extra_kwargs = {}
+            for k, v in kwargs.items():
+                if has_var_kwargs or k in diff_params:
+                    init_kwargs[k] = v
+                else:
+                    extra_kwargs[k] = v
+            training_args = DiffusionTrainingArguments(**init_kwargs)
+            for k, v in extra_kwargs.items():
+                setattr(training_args, k, v)
         elif not hasattr(training_args, "training_method"):
             # Set training_method if standard TrainingArguments was passed
             setattr(training_args, "training_method", method)
