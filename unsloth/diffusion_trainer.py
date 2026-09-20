@@ -70,7 +70,24 @@ __all__ = [
 class DiffusionTrainingArguments(TrainingArguments):
     """
     Hyperparameters specifically designed for discrete diffusion language models.
+    Configured with memory-efficient defaults for large (26B+) models.
     """
+    optim: str = field(
+        default="paged_adamw_8bit",
+        metadata={"help": "The optimizer to use. Default 'paged_adamw_8bit' saves ~75% optimizer VRAM."},
+    )
+    gradient_checkpointing: bool = field(
+        default=True,
+        metadata={"help": "Enable gradient checkpointing to drastically reduce activation VRAM."},
+    )
+    per_device_train_batch_size: int = field(
+        default=1,
+        metadata={"help": "Batch size per GPU. Defaults to 1 for large (26B+) models."},
+    )
+    gradient_accumulation_steps: int = field(
+        default=8,
+        metadata={"help": "Number of updates steps to accumulate before backward/update."},
+    )
     training_method: str = field(
         default="sft",
         metadata={"help": "Training methodology: 'sft', 'dpo', 'orpo', 'grpo', 'kto', 'pretrain'."},

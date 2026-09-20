@@ -171,6 +171,13 @@ class FastDiffusionModel:
         **kwargs,
     ):
         SUPPORTS_BFLOAT16 = is_bfloat16_supported()
+        if torch.cuda.is_available():
+            os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+            import gc
+            gc.collect()
+            torch.cuda.empty_cache()
+
+        dtype = _get_dtype(dtype, default = None)
         if dtype is None:
             dtype = torch.float16 if not SUPPORTS_BFLOAT16 else torch.bfloat16
         elif dtype == torch.bfloat16 and not SUPPORTS_BFLOAT16:
