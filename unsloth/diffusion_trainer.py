@@ -460,16 +460,25 @@ class DiffusionTrainer(Trainer):
         flat_logits = logits.view(-1, V)
         flat_labels = labels.view(-1)
 
-        ce = nn.functional.cross_entropy(
-            flat_logits,
-            flat_labels,
-            ignore_index=-100,
-            reduction="none",
-        ).view(B, L)
+        valid_mask = (flat_labels != -100)
+        sample_losses = torch.zeros(B, device=logits.device, dtype=logits.dtype)
+        if not valid_mask.any():
+            return sample_losses
 
-        valid = (labels != -100).float()
-        sample_loss = (ce * valid).sum(dim=1) / valid.sum(dim=1).clamp(min=1.0)
-        return sample_loss
+        valid_logits = flat_logits[valid_mask]
+        valid_labels = flat_labels[valid_mask]
+
+        valid_ce = nn.functional.cross_entropy(
+            valid_logits,
+            valid_labels,
+            reduction="none",
+        )
+
+        sample_indices = torch.arange(B, device=logits.device).unsqueeze(1).expand(B, L).reshape(-1)[valid_mask]
+        sample_losses.index_add_(0, sample_indices, valid_ce)
+
+        valid_counts = (labels != -100).sum(dim=1).clamp(min=1.0)
+        return sample_losses / valid_counts
 
 
 # =====================================================================

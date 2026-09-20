@@ -158,6 +158,62 @@ def _load_diffusion_config(
         return aliased
 
 
+def _patch_diffusion_gemma_forward(model):
+    """Patch DiffusionGemma forward to perform logit softcapping in-place, saving ~6 GB of temporary float32 tensors."""
+    if type(model).__name__ in ("DiffusionGemmaForBlockDiffusion", "DiffusionGemma4ForBlockDiffusion"):
+        import types
+        def fast_forward(
+            self,
+            input_ids = None,
+            attention_mask = None,
+            past_key_values = None,
+            position_ids = None,
+            decoder_input_ids = None,
+            self_conditioning_logits = None,
+            self_conditioning_mask = None,
+            decoder_attention_mask = None,
+            decoder_position_ids = None,
+            **kwargs,
+        ):
+            model_outputs = self.model(
+                input_ids = input_ids,
+                attention_mask = attention_mask,
+                past_key_values = past_key_values,
+                position_ids = position_ids,
+                decoder_input_ids = decoder_input_ids,
+                self_conditioning_logits = self_conditioning_logits,
+                self_conditioning_mask = self_conditioning_mask,
+                decoder_attention_mask = decoder_attention_mask,
+                decoder_position_ids = decoder_position_ids,
+                **kwargs,
+            )
+            logits = self.lm_head(model_outputs.last_hidden_state)
+            if getattr(self, "final_logit_softcapping", None):
+                cap = float(self.final_logit_softcapping)
+                logits = logits.float()
+                logits.mul_(1.0 / cap).tanh_().mul_(cap)
+
+            return_cls = getattr(self, "_output_cls", None)
+            if return_cls is None:
+                try:
+                    from transformers.models.diffusion_gemma.modeling_diffusion_gemma import (
+                        DiffusionGemmaBlockDiffusionOutputWithPast as return_cls,
+                    )
+                except ImportError:
+                    from transformers.modeling_outputs import CausalLMOutputWithPast as return_cls
+                self._output_cls = return_cls
+
+            return return_cls(
+                logits = logits,
+                past_key_values = model_outputs.past_key_values,
+                hidden_states = model_outputs.hidden_states,
+                attentions = model_outputs.attentions,
+            )
+
+        model.forward = types.MethodType(fast_forward, model)
+        model._unsloth_softcap_patched = True
+
+
 class FastDiffusionModel:
     """transformers-only slow path for text-diffusion models."""
 
@@ -329,8 +385,7 @@ class FastDiffusionModel:
         model = model_cls.from_pretrained(model_name, **load_kwargs).eval()
         # Mark before any early return so get_peft_model/for_* route to the slow path.
         model._unsloth_slow_diffusion = True
-
-        model._unsloth_slow_diffusion = True
+        _patch_diffusion_gemma_forward(model)
 
         if not return_tokenizer:
             return model, None

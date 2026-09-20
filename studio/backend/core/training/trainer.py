@@ -342,6 +342,7 @@ class UnslothTrainer:
 
         self.is_cpt = False
         self.is_vlm = False
+        self.is_diffusion = False
         self.is_audio = False
         self.is_audio_vlm = False
         self._audio_type = None
@@ -1216,6 +1217,18 @@ class UnslothTrainer:
                 self.model.for_training(
                     use_gradient_checkpointing = use_gradient_checkpointing,
                 )
+
+            self.is_diffusion = (
+                getattr(self.model, "_unsloth_slow_diffusion", False)
+                or type(self.model).__name__ in (
+                    "DiffusionGemmaForBlockDiffusion",
+                    "DiffusionGemma4ForBlockDiffusion",
+                    "DiffusionGemma4ModelForBlockDiffusion",
+                )
+                or getattr(getattr(self.model, "config", None), "model_type", "") in ("diffusion_gemma", "diffusion_gemma4")
+            )
+            if self.is_diffusion:
+                logger.info("Detected discrete diffusion model (DiffusionGemma)")
 
             self._update_progress(status_message = "Model loaded successfully")
             logger.info("Model loaded successfully")
@@ -4212,19 +4225,49 @@ class UnslothTrainer:
             else:
                 is_cpt = training_args.get("is_cpt", False)
                 self.is_cpt = is_cpt
-                if is_cpt:
+                if self.is_diffusion:
+                    logger.info("Configuring discrete diffusion training parameters\n")
+                    orig_bs = config_args.get("per_device_train_batch_size", 1)
+                    if orig_bs > 1:
+                        config_args["per_device_train_batch_size"] = 1
+                        config_args["gradient_accumulation_steps"] = config_args.get("gradient_accumulation_steps", 4) * orig_bs
+                        logger.info(
+                            f"Diffusion model: adjusted batch_size from {orig_bs} -> 1 and "
+                            f"gradient_accumulation_steps to {config_args['gradient_accumulation_steps']} to prevent CUDA OOM.\n"
+                        )
+                    optim_value = "paged_adamw_8bit"
+                    config_args["optim"] = optim_value
+                    config_args["gradient_checkpointing"] = True
+                    config_args["gradient_checkpointing_kwargs"] = {"use_reentrant": False}
+                    config_args["dataset_text_field"] = "text"
+                    config_args["canvas_block_size"] = training_args.get("canvas_block_size", 256)
+                elif is_cpt:
                     logger.info("Configuring Continued Pretraining (CPT) parameters\n")
+                    config_args.update(
+                        {
+                            "optim": optim_value,
+                            "lr_scheduler_type": lr_scheduler_type_value,
+                            "dataset_text_field": "text",
+                        }
+                    )
                 elif raw_text_mode:
                     logger.info("Configuring raw-text training parameters\n")
+                    config_args.update(
+                        {
+                            "optim": optim_value,
+                            "lr_scheduler_type": lr_scheduler_type_value,
+                            "dataset_text_field": "text",
+                        }
+                    )
                 else:
                     logger.info("Configuring text model training parameters\n")
-                config_args.update(
-                    {
-                        "optim": optim_value,
-                        "lr_scheduler_type": lr_scheduler_type_value,
-                        "dataset_text_field": "text",
-                    }
-                )
+                    config_args.update(
+                        {
+                            "optim": optim_value,
+                            "lr_scheduler_type": lr_scheduler_type_value,
+                            "dataset_text_field": "text",
+                        }
+                    )
 
                 # Packing for text models only (DeepSeek OCR is VLM)
                 if not is_deepseek_ocr:
@@ -4345,6 +4388,45 @@ class UnslothTrainer:
                     if eval_dataset is not None:
                         trainer_kwargs["eval_dataset"] = eval_dataset
                     self.trainer = _UnslothCPTTrainer(**trainer_kwargs)
+                elif self.is_diffusion:
+                    from unsloth.diffusion_trainer import (
+                        DiffusionSFTTrainer,
+                        DiffusionTrainingArguments,
+                    )
+                    logger.info("Initializing DiffusionSFTTrainer for discrete diffusion model...\n")
+                    diff_args = DiffusionTrainingArguments(
+                        output_dir = output_dir,
+                        per_device_train_batch_size = config_args.get("per_device_train_batch_size", 1),
+                        gradient_accumulation_steps = config_args.get("gradient_accumulation_steps", 8),
+                        learning_rate = lr_value,
+                        optim = "paged_adamw_8bit",
+                        gradient_checkpointing = True,
+                        gradient_checkpointing_kwargs = {"use_reentrant": False},
+                        weight_decay = training_args.get("weight_decay", 0.001),
+                        seed = training_args.get("random_seed", 3407),
+                        fp16 = not is_bfloat16_supported(),
+                        bf16 = is_bfloat16_supported(),
+                        logging_steps = 1,
+                        report_to = _build_report_targets(training_args),
+                        disable_tqdm = _hf_stdout_progress_disabled(),
+                        max_seq_length = training_args.get("max_seq_length", 2048),
+                        canvas_block_size = training_args.get("canvas_block_size", 256),
+                    )
+                    if max_steps_val and max_steps_val > 0:
+                        diff_args.max_steps = max_steps_val
+                    else:
+                        diff_args.num_train_epochs = config_args.get("num_train_epochs", 3)
+
+                    trainer_kwargs = {
+                        "model": self.model,
+                        "tokenizer": sft_tokenizer,
+                        "train_dataset": dataset["dataset"],
+                        "data_collator": data_collator,
+                        "args": diff_args,
+                    }
+                    if eval_dataset is not None:
+                        trainer_kwargs["eval_dataset"] = eval_dataset
+                    self.trainer = DiffusionSFTTrainer(**trainer_kwargs)
                 else:
                     trainer_kwargs = {
                         "model": self.model,

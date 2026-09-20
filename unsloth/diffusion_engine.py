@@ -392,30 +392,39 @@ class DiffusionLoss(nn.Module):
         """
         B, L, V = logits.shape
 
-        # Flatten tensors
+        # Memory optimization: only evaluate cross entropy on valid (non -100) positions.
+        # Gemma has V=256,000. Computing CE on all B*L positions allocates gigabytes of
+        # float32 tensors, causing CUDA OOM on large models.
         flat_logits = logits.view(-1, V)
         flat_labels = labels.view(-1)
 
-        # Standard token-level cross-entropy
-        ce_loss = F.cross_entropy(
-            flat_logits,
-            flat_labels,
-            ignore_index=-100,
+        valid_mask = (flat_labels != -100)
+        if not valid_mask.any():
+            return (logits * 0.0).sum()
+
+        valid_logits = flat_logits[valid_mask]
+        valid_labels = flat_labels[valid_mask]
+
+        valid_ce = F.cross_entropy(
+            valid_logits,
+            valid_labels,
             reduction="none",
             label_smoothing=self.label_smoothing,
-        ).view(B, L)
+        )
 
         if loss_weights is not None:
-            # Weight loss per sample by w(t)
-            ce_loss = ce_loss * loss_weights.view(B, 1)
+            # Expand sample weights to valid tokens
+            sample_indices = torch.arange(B, device=logits.device).unsqueeze(1).expand(B, L).reshape(-1)
+            valid_sample_idx = sample_indices[valid_mask]
+            sample_weights = loss_weights[valid_sample_idx]
+            valid_ce = valid_ce * sample_weights
 
-        # Average over valid (masked) tokens
         if loss_mask is not None:
             valid_tokens = loss_mask.sum().clamp(min=1.0)
-            return ce_loss.sum() / valid_tokens
         else:
-            valid_tokens = (labels != -100).sum().clamp(min=1.0)
-            return ce_loss.sum() / valid_tokens
+            valid_tokens = valid_mask.sum().clamp(min=1.0)
+
+        return valid_ce.sum() / valid_tokens
 
 
 class SemanticDiffusionLoss(nn.Module):
