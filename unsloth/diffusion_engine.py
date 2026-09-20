@@ -390,11 +390,34 @@ class DiffusionLoss(nn.Module):
             loss_weights: (B,) ELBO weighting w(t) per sample.
             loss_mask: (B, L) bool mask of positions where denoising is evaluated.
         """
-        B, L, V = logits.shape
+        B, L = labels.shape
 
-        # Memory optimization: only evaluate cross entropy on valid (non -100) positions.
-        # Gemma has V=256,000. Computing CE on all B*L positions allocates gigabytes of
-        # float32 tensors, causing CUDA OOM on large models.
+        if logits.ndim == 2:
+            # Selective LM-head: logits is already filtered to (N_valid, V)
+            valid_mask = (labels.view(-1) != -100)
+            if not valid_mask.any():
+                return (logits * 0.0).sum()
+            valid_labels = labels.view(-1)[valid_mask]
+            valid_ce = F.cross_entropy(
+                logits,
+                valid_labels,
+                reduction="none",
+                label_smoothing=self.label_smoothing,
+            )
+            if loss_weights is not None:
+                sample_indices = torch.arange(B, device=logits.device).unsqueeze(1).expand(B, L).reshape(-1)
+                valid_sample_idx = sample_indices[valid_mask]
+                sample_weights = loss_weights[valid_sample_idx]
+                valid_ce = valid_ce * sample_weights
+
+            if loss_mask is not None:
+                valid_tokens = loss_mask.sum().clamp(min=1.0)
+            else:
+                valid_tokens = valid_mask.sum().clamp(min=1.0)
+
+            return valid_ce.sum() / valid_tokens
+
+        V = logits.shape[-1]
         flat_logits = logits.view(-1, V)
         flat_labels = labels.view(-1)
 

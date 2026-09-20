@@ -159,7 +159,7 @@ def _load_diffusion_config(
 
 
 def _patch_diffusion_gemma_forward(model):
-    """Patch DiffusionGemma forward to perform logit softcapping in-place, saving ~6 GB of temporary float32 tensors."""
+    """Patch DiffusionGemma forward to perform selective LM-head evaluation and in-place softcapping, saving ~4 GB VRAM."""
     if type(model).__name__ in ("DiffusionGemmaForBlockDiffusion", "DiffusionGemma4ForBlockDiffusion"):
         import types
         def fast_forward(
@@ -173,6 +173,7 @@ def _patch_diffusion_gemma_forward(model):
             self_conditioning_mask = None,
             decoder_attention_mask = None,
             decoder_position_ids = None,
+            labels = None,
             **kwargs,
         ):
             model_outputs = self.model(
@@ -187,11 +188,35 @@ def _patch_diffusion_gemma_forward(model):
                 decoder_position_ids = decoder_position_ids,
                 **kwargs,
             )
-            logits = self.lm_head(model_outputs.last_hidden_state)
-            if getattr(self, "final_logit_softcapping", None):
-                cap = float(self.final_logit_softcapping)
-                logits = logits.float()
-                logits.mul_(1.0 / cap).tanh_().mul_(cap)
+            hidden_states = model_outputs.last_hidden_state
+
+            loss = None
+            # Selective LM-head: when training and labels are provided, compute lm_head and loss
+            # ONLY for masked/valid tokens (labels != -100). Gemma has vocab_size=256,000.
+            # Evaluating lm_head over all positions wastes ~3.8 GB of VRAM and causes CUDA OOM.
+            if self.training and labels is not None:
+                valid_mask = (labels != -100)
+                if valid_mask.any():
+                    hidden_flat = hidden_states.view(-1, hidden_states.shape[-1])
+                    valid_mask_flat = valid_mask.view(-1)
+                    valid_hidden = hidden_flat[valid_mask_flat]
+                    valid_logits = self.lm_head(valid_hidden)
+                    if getattr(self, "final_logit_softcapping", None):
+                        cap = float(self.final_logit_softcapping)
+                        valid_logits = valid_logits.float()
+                        valid_logits.mul_(1.0 / cap).tanh_().mul_(cap)
+
+                    valid_labels = labels.view(-1)[valid_mask_flat]
+                    loss = torch.nn.functional.cross_entropy(valid_logits, valid_labels)
+                    logits = valid_logits
+                else:
+                    logits = torch.empty((0, self.lm_head.out_features), device=hidden_states.device, dtype=hidden_states.dtype)
+            else:
+                logits = self.lm_head(hidden_states)
+                if getattr(self, "final_logit_softcapping", None):
+                    cap = float(self.final_logit_softcapping)
+                    logits = logits.float()
+                    logits.mul_(1.0 / cap).tanh_().mul_(cap)
 
             return_cls = getattr(self, "_output_cls", None)
             if return_cls is None:
@@ -204,6 +229,7 @@ def _patch_diffusion_gemma_forward(model):
                 self._output_cls = return_cls
 
             return return_cls(
+                loss = loss,
                 logits = logits,
                 past_key_values = model_outputs.past_key_values,
                 hidden_states = model_outputs.hidden_states,
@@ -222,7 +248,7 @@ class FastDiffusionModel:
         model_name = "google/diffusiongemma-26B-A4B-it",
         max_seq_length = None,  # API-compat; diffusion uses canvas_length
         dtype = None,
-        load_in_4bit = False,
+        load_in_4bit = True,
         load_in_8bit = False,
         load_in_16bit = False,
         full_finetuning = False,

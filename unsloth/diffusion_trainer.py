@@ -253,10 +253,10 @@ class DiffusionTrainer(Trainer):
 
     def _get_logits_from_model(self, model: Any, inputs: Dict[str, Any]) -> torch.Tensor:
         """Extract logits cleanly across varying model signatures and backbones."""
-        # Filter inputs to only what model.forward accepts
+        # Filter inputs to only what model.forward accepts (including labels for selective lm_head)
         model_kwargs = {
             k: v for k, v in inputs.items()
-            if k in ("input_ids", "attention_mask", "position_ids", "pixel_values", "pixel_attention_mask")
+            if k in ("input_ids", "attention_mask", "position_ids", "pixel_values", "pixel_attention_mask", "labels")
         }
 
         # Forward pass
@@ -302,13 +302,22 @@ class DiffusionTrainer(Trainer):
         loss_weights = inputs.get("loss_weights")
         loss_mask = inputs.get("loss_mask")
 
-        logits = self._get_logits_from_model(model, inputs)
-        loss = self.diffusion_loss_fn(
-            logits=logits,
-            labels=labels,
-            loss_weights=loss_weights,
-            loss_mask=loss_mask,
-        )
+        model_kwargs = {
+            k: v for k, v in inputs.items()
+            if k in ("input_ids", "attention_mask", "position_ids", "pixel_values", "pixel_attention_mask", "labels")
+        }
+        outputs = model(**model_kwargs)
+        if hasattr(outputs, "loss") and outputs.loss is not None and loss_weights is None:
+            loss = outputs.loss
+            logits = outputs.logits
+        else:
+            logits = outputs.logits if hasattr(outputs, "logits") else (outputs[0] if isinstance(outputs, tuple) else outputs)
+            loss = self.diffusion_loss_fn(
+                logits=logits,
+                labels=labels,
+                loss_weights=loss_weights,
+                loss_mask=loss_mask,
+            )
 
         return (loss, {"logits": logits}) if return_outputs else loss
 
@@ -456,7 +465,20 @@ class DiffusionTrainer(Trainer):
 
     def _compute_samplewise_loss(self, logits: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
         """Compute mean cross-entropy loss per sample in the batch (B,)."""
-        B, L, V = logits.shape
+        B, L = labels.shape
+        if logits.ndim == 2:
+            valid_mask = (labels.view(-1) != -100)
+            sample_losses = torch.zeros(B, device=logits.device, dtype=logits.dtype)
+            if not valid_mask.any():
+                return sample_losses
+            valid_labels = labels.view(-1)[valid_mask]
+            valid_ce = nn.functional.cross_entropy(logits, valid_labels, reduction="none")
+            sample_indices = torch.arange(B, device=logits.device).unsqueeze(1).expand(B, L).reshape(-1)[valid_mask]
+            sample_losses.index_add_(0, sample_indices, valid_ce)
+            valid_counts = (labels != -100).sum(dim=1).clamp(min=1.0)
+            return sample_losses / valid_counts
+
+        V = logits.shape[-1]
         flat_logits = logits.view(-1, V)
         flat_labels = labels.view(-1)
 

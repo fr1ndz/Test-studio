@@ -4241,6 +4241,9 @@ class UnslothTrainer:
                     config_args["gradient_checkpointing_kwargs"] = {"use_reentrant": False}
                     config_args["dataset_text_field"] = "text"
                     config_args["canvas_block_size"] = training_args.get("canvas_block_size", 256)
+                    if "max_seq_length" not in training_args:
+                        config_args["max_seq_length"] = 1024
+                        logger.info("Diffusion model: defaulting max_seq_length to 1024 to preserve VRAM.\n")
                 elif is_cpt:
                     logger.info("Configuring Continued Pretraining (CPT) parameters\n")
                     config_args.update(
@@ -4591,6 +4594,10 @@ class UnslothTrainer:
 
             self._update_progress(total_steps = total_steps, status_message = "Starting training...")
             logger.info("Starting training...\n")
+            if torch.cuda.is_available():
+                import gc
+                gc.collect()
+                torch.cuda.empty_cache()
             try:
                 self.trainer.train(
                     resume_from_checkpoint = training_args.get("resume_from_checkpoint")
