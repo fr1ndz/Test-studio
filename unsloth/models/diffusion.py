@@ -313,6 +313,8 @@ class FastDiffusionModel:
         # Mark before any early return so get_peft_model/for_* route to the slow path.
         model._unsloth_slow_diffusion = True
 
+        model._unsloth_slow_diffusion = True
+
         if not return_tokenizer:
             return model, None
 
@@ -337,6 +339,7 @@ class FastDiffusionModel:
                 cache_dir = cache_dir,
             )
 
+        model._saved_temp_tokenizer = tokenizer
         return model, tokenizer
 
     @staticmethod
@@ -354,6 +357,8 @@ class FastDiffusionModel:
     ):
         """Attach a PEFT LoRA to the diffusion backbone (attention + dense MLP). No fused kernels."""
         from peft import LoraConfig, get_peft_model as peft_get_peft_model
+
+        _saved_temp_tokenizer = getattr(model, "_saved_temp_tokenizer", None)
 
         if target_modules is None:
             target_modules = DIFFUSION_LORA_TARGETS
@@ -386,6 +391,8 @@ class FastDiffusionModel:
 
         model = peft_get_peft_model(model, lora_config)
         model._unsloth_slow_diffusion = True
+        if _saved_temp_tokenizer is not None:
+            model._saved_temp_tokenizer = _saved_temp_tokenizer
         try:
             model.print_trainable_parameters()
         except Exception:

@@ -1132,19 +1132,46 @@ class FastModel(FastBaseModel):
     @staticmethod
     def get_peft_model(model, *args, **kwargs):
         # Route text-diffusion models (slow path) to the transformers-only PEFT helper.
-        if getattr(model, "_unsloth_slow_diffusion", False):
+        is_diffusion = (
+            getattr(model, "_unsloth_slow_diffusion", False)
+            or is_diffusion_model_type(getattr(getattr(model, "config", None), "model_type", None))
+            or type(model).__name__ in (
+                "DiffusionGemmaForBlockDiffusion",
+                "DiffusionGemma4ForBlockDiffusion",
+                "DiffusionGemma4ModelForBlockDiffusion",
+            )
+        )
+        if is_diffusion:
             return FastDiffusionModel.get_peft_model(model, *args, **kwargs)
         return FastBaseModel.get_peft_model(model, *args, **kwargs)
 
     @staticmethod
     def for_inference(model):
-        if getattr(model, "_unsloth_slow_diffusion", False):
+        is_diffusion = (
+            getattr(model, "_unsloth_slow_diffusion", False)
+            or is_diffusion_model_type(getattr(getattr(model, "config", None), "model_type", None))
+            or type(model).__name__ in (
+                "DiffusionGemmaForBlockDiffusion",
+                "DiffusionGemma4ForBlockDiffusion",
+                "DiffusionGemma4ModelForBlockDiffusion",
+            )
+        )
+        if is_diffusion:
             return FastDiffusionModel.for_inference(model)
         return FastBaseModel.for_inference(model)
 
     @staticmethod
     def for_training(model, use_gradient_checkpointing = True):
-        if getattr(model, "_unsloth_slow_diffusion", False):
+        is_diffusion = (
+            getattr(model, "_unsloth_slow_diffusion", False)
+            or is_diffusion_model_type(getattr(getattr(model, "config", None), "model_type", None))
+            or type(model).__name__ in (
+                "DiffusionGemmaForBlockDiffusion",
+                "DiffusionGemma4ForBlockDiffusion",
+                "DiffusionGemma4ModelForBlockDiffusion",
+            )
+        )
+        if is_diffusion:
             return FastDiffusionModel.for_training(model, use_gradient_checkpointing)
         return FastBaseModel.for_training(model, use_gradient_checkpointing)
 

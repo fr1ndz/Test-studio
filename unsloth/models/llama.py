@@ -3087,6 +3087,29 @@ class FastLlamaModel:
         ensure_weight_tying = None,  # None = auto (tie when we redirect a tied pair)
         **kwargs,
     ):
+        from .diffusion import is_diffusion_model_type, FastDiffusionModel
+        is_diffusion = (
+            getattr(model, "_unsloth_slow_diffusion", False)
+            or is_diffusion_model_type(getattr(getattr(model, "config", None), "model_type", None))
+            or type(model).__name__ in (
+                "DiffusionGemmaForBlockDiffusion",
+                "DiffusionGemma4ForBlockDiffusion",
+                "DiffusionGemma4ModelForBlockDiffusion",
+            )
+        )
+        if is_diffusion:
+            return FastDiffusionModel.get_peft_model(
+                model = model,
+                r = r,
+                target_modules = target_modules,
+                lora_alpha = lora_alpha,
+                lora_dropout = lora_dropout,
+                bias = bias,
+                use_gradient_checkpointing = use_gradient_checkpointing,
+                random_state = random_state,
+                **kwargs,
+            )
+
         if os.environ.get("UNSLOTH_USE_NEW_MODEL", "0") == "1":
             for peft_arg, flag in (
                 ("finetune_vision_layers", False),
@@ -3491,7 +3514,7 @@ class FastLlamaModel:
         if not SUPPORTS_RSLORA:
             del arguments["use_rslora"]
 
-        _saved_temp_tokenizer = model._saved_temp_tokenizer
+        _saved_temp_tokenizer = getattr(model, "_saved_temp_tokenizer", None)
 
         lora_config = LoraConfig(**arguments)
         input_embeddings_device = model.get_input_embeddings().weight.device
@@ -3535,7 +3558,8 @@ class FastLlamaModel:
             print("Unsloth: Applying QAT to mitigate quantization degradation")
             model = FastLlamaModel._prepare_for_qat(model, qat_scheme)
 
-        model._saved_temp_tokenizer = _saved_temp_tokenizer
+        if _saved_temp_tokenizer is not None:
+            model._saved_temp_tokenizer = _saved_temp_tokenizer
 
         model = FastLlamaModel.patch_peft_model(model, use_gradient_checkpointing)
 
