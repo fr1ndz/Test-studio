@@ -4397,6 +4397,25 @@ class UnslothTrainer:
                         DiffusionTrainingArguments,
                     )
                     logger.info("Initializing DiffusionSFTTrainer for discrete diffusion model...\n")
+                    moe_active = training_args.get("moe_active_training", True)
+                    moe_clusters = training_args.get("moe_num_clusters", 4)
+                    moe_switch_steps = training_args.get("moe_cluster_switch_steps", 250)
+
+                    # Ensure MoE active parameters is patched if model has MoE experts
+                    has_moe = any(type(m).__name__ == "DiffusionGemmaTextExperts" for m in self.model.modules())
+                    if has_moe and not hasattr(self.model, "_moe_controller"):
+                        from unsloth.moe_active import patch_moe_active_parameters
+                        patch_moe_active_parameters(
+                            self.model,
+                            num_clusters = moe_clusters,
+                            offload_to_cpu = True,
+                            trainable_experts = False,
+                        )
+                        logger.info(
+                            f"Applied active parameter MoE patching ({moe_clusters} clusters, "
+                            f"master weights offloaded to pinned CPU memory).\n"
+                        )
+
                     diff_args = DiffusionTrainingArguments(
                         output_dir = output_dir,
                         per_device_train_batch_size = config_args.get("per_device_train_batch_size", 1),
@@ -4414,6 +4433,9 @@ class UnslothTrainer:
                         disable_tqdm = _hf_stdout_progress_disabled(),
                         max_seq_length = training_args.get("max_seq_length", 2048),
                         canvas_block_size = training_args.get("canvas_block_size", 256),
+                        moe_active_training = moe_active,
+                        moe_num_clusters = moe_clusters,
+                        moe_cluster_switch_steps = moe_switch_steps,
                     )
                     if max_steps_val and max_steps_val > 0:
                         diff_args.max_steps = max_steps_val

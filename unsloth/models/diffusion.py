@@ -413,6 +413,20 @@ class FastDiffusionModel:
         model._unsloth_slow_diffusion = True
         _patch_diffusion_gemma_forward(model)
 
+        # Check for MoE architecture and apply Active Parameter MoE training
+        has_moe = any(type(m).__name__ == "DiffusionGemmaTextExperts" for m in model.modules())
+        enable_active_moe = kwargs.get("moe_active_training", True) and has_moe
+        if enable_active_moe:
+            from ..moe_active import patch_moe_active_parameters
+            moe_clusters = kwargs.get("moe_num_clusters", 4)
+            moe_offload = kwargs.get("moe_offload_to_cpu", True)
+            patch_moe_active_parameters(
+                model = model,
+                num_clusters = moe_clusters,
+                offload_to_cpu = moe_offload,
+                trainable_experts = kwargs.get("trainable_experts", False),
+            )
+
         if not return_tokenizer:
             return model, None
 
@@ -448,8 +462,15 @@ class FastDiffusionModel:
         lora_alpha = 16,
         lora_dropout = 0.0,
         bias = "none",
+        layers_to_transform = None,
+        layers_pattern = None,
         use_gradient_checkpointing = True,
         random_state = 3407,
+        max_seq_length = 2048,
+        use_rslora = False,
+        modules_to_save = None,
+        init_lora_weights = True,
+        loftq_config = None,
         task_type = None,
         **kwargs,
     ):
@@ -457,9 +478,10 @@ class FastDiffusionModel:
         from peft import LoraConfig, get_peft_model as peft_get_peft_model
 
         _saved_temp_tokenizer = getattr(model, "_saved_temp_tokenizer", None)
+        _moe_controller = getattr(model, "_moe_controller", None)
 
         if target_modules is None:
-            target_modules = DIFFUSION_LORA_TARGETS
+            target_modules = DIFFUSION_TARGET_MODULES
 
         # use_dora, and any other LoraConfig kwarg outside this allowlist, is silently dropped: Unsloth does
         # not reach this path today, so it is untested on diffusion models.
@@ -491,6 +513,8 @@ class FastDiffusionModel:
         model._unsloth_slow_diffusion = True
         if _saved_temp_tokenizer is not None:
             model._saved_temp_tokenizer = _saved_temp_tokenizer
+        if _moe_controller is not None:
+            model._moe_controller = _moe_controller
         try:
             model.print_trainable_parameters()
         except Exception:

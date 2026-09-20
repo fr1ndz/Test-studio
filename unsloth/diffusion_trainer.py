@@ -148,9 +148,18 @@ class DiffusionTrainingArguments(TrainingArguments):
         default=0.2,
         metadata={"help": "PPO/GRPO clipping range epsilon."},
     )
-    kl_coeff_grpo: float = field(
-        default=0.01,
-        metadata={"help": "KL divergence regularization weight in Diffusion-GRPO."},
+    # Active MoE parameters
+    moe_active_training: bool = field(
+        default=True,
+        metadata={"help": "Enable active parameter MoE training with cyclic cluster rotation."},
+    )
+    moe_num_clusters: int = field(
+        default=4,
+        metadata={"help": "Number of expert clusters (e.g. 4 clusters of 32 experts for 128 experts)."},
+    )
+    moe_cluster_switch_steps: int = field(
+        default=250,
+        metadata={"help": "Number of training steps per cluster before rotating."},
     )
 
 
@@ -231,6 +240,18 @@ class DiffusionTrainer(Trainer):
             optimizers=optimizers,
             preprocess_logits_for_metrics=preprocess_logits_for_metrics,
         )
+
+        # Attach MoE cyclic callback if model is using active parameter MoE training
+        moe_controller = getattr(model, "_moe_controller", None)
+        if moe_controller is None and hasattr(model, "base_model"):
+            moe_controller = getattr(model.base_model, "_moe_controller", None)
+        if moe_controller is None and hasattr(model, "model"):
+            moe_controller = getattr(model.model, "_moe_controller", None)
+
+        if moe_controller is not None:
+            from .moe_active import MoECyclicCallback
+            self.add_callback(MoECyclicCallback(moe_controller, model))
+            logger.info("DiffusionTrainer: Attached MoECyclicCallback for active parameter MoE training.")
 
         # Initialize loss modules
         self.diffusion_loss_fn = DiffusionLoss()
