@@ -278,3 +278,56 @@ class ExportLoRAAdapterRequest(ExportCommonOptions):
         description = "GGUF LoRA output float type (only used when gguf=True). "
         "Q8_0 falls back to F16 per tensor for dims not divisible by the block size (32).",
     )
+
+
+class ExportMoERequest(ExportCommonOptions):
+    """Request for upcycling dense models to Mixture of Experts (MoE)."""
+
+    num_experts: int = Field(
+        8,
+        ge = 2,
+        le = 128,
+        description = "Total number of experts in the upcycled MoE layer.",
+    )
+    num_experts_per_tok: int = Field(
+        2,
+        ge = 1,
+        le = 32,
+        description = "Top-k active experts per token.",
+    )
+    method: Literal["sparse_upcycling", "neuron_clustering"] = Field(
+        "sparse_upcycling",
+        description = "Algorithm for constructing experts: 'sparse_upcycling' (duplicate with noise) "
+        "or 'neuron_clustering' (k-means clustering of hidden projections).",
+    )
+
+
+class Export1BitRequest(ExportCommonOptions):
+    """Request for BitNet 1-Bit / 1.58-Bit quantization."""
+
+    mode: Literal["ternary", "binary_bipolar", "binary_unipolar"] = Field(
+        "ternary",
+        description = "Quantization mode: 'ternary' (BitNet b1.58 {-1, 0, +1}), "
+        "'binary_bipolar' ({-1, +1}), or 'binary_unipolar' ({0, 1}).",
+    )
+    pack_bits: bool = Field(
+        True,
+        description = "Pack quantized weights into uint8 tensors for compact storage.",
+    )
+
+
+class ExportNeuroplasticRequest(ExportCommonOptions):
+    """Request for exporting bio-inspired neuroplastic weights and states."""
+
+    save_states: bool = Field(
+        True,
+        description = "Whether to save 2-bit permanent synaptic state S, potential P, and stability M.",
+    )
+    alpha: float = Field(
+        0.5,
+        description = "Weak exploratory weight value (state 01).",
+    )
+    beta: float = Field(
+        1.5,
+        description = "Consolidated weight multiplier (state 11).",
+    )

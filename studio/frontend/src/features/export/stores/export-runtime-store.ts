@@ -8,6 +8,9 @@ import {
   exportGGUF,
   exportLoRA,
   exportMerged,
+  exportMoE,
+  export1Bit,
+  exportNeuroplastic,
   getExportStatus,
   isRecoverableTransportError,
   loadCheckpoint,
@@ -521,6 +524,62 @@ export const useExportRuntimeStore = create<ExportRuntimeStore>()((set, get) => 
         if (outputPath) {
           outputs.push({
             label: params.loraGguf ? "GGUF LoRA adapter" : "LoRA adapter",
+            path: outputPath,
+          });
+        }
+      } else if (params.exportMethod === "moe") {
+        const { outputPath } = await runRecoverableOp(() =>
+          exportMoE({
+            save_directory: params.saveDirectory,
+            num_experts: 8,
+            num_experts_per_tok: 2,
+            method: "sparse_upcycling",
+            push_to_hub: pushToHub,
+            repo_id: params.repoId,
+            hf_token: params.token ?? params.loadToken ?? null,
+            private: params.privateRepo,
+          }),
+        );
+        if (outputPath) {
+          outputs.push({
+            label: "Dense-to-MoE (.safetensors)",
+            path: outputPath,
+          });
+        }
+      } else if (params.exportMethod === "1bit") {
+        const { outputPath } = await runRecoverableOp(() =>
+          export1Bit({
+            save_directory: params.saveDirectory,
+            mode: "ternary",
+            pack_bits: true,
+            push_to_hub: pushToHub,
+            repo_id: params.repoId,
+            hf_token: params.token ?? params.loadToken ?? null,
+            private: params.privateRepo,
+          }),
+        );
+        if (outputPath) {
+          outputs.push({
+            label: "1-Bit / 1.58-Bit BitNet (.safetensors)",
+            path: outputPath,
+          });
+        }
+      } else if (params.exportMethod === "neuroplastic") {
+        const { outputPath } = await runRecoverableOp(() =>
+          exportNeuroplastic({
+            save_directory: params.saveDirectory,
+            save_states: true,
+            alpha: 0.5,
+            beta: 1.5,
+            push_to_hub: pushToHub,
+            repo_id: params.repoId,
+            hf_token: params.token ?? params.loadToken ?? null,
+            private: params.privateRepo,
+          }),
+        );
+        if (outputPath) {
+          outputs.push({
+            label: "Neuroplastic Synapses (.safetensors)",
             path: outputPath,
           });
         }

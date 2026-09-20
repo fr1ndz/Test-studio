@@ -3,7 +3,7 @@
 
 import type { TrainingMethod } from "@/types/training";
 
-export type ExportMethod = "merged" | "lora" | "gguf";
+export type ExportMethod = "merged" | "lora" | "gguf" | "moe" | "1bit" | "neuroplastic";
 
 export const EXPORT_METHODS: {
   value: ExportMethod;
@@ -32,6 +32,30 @@ export const EXPORT_METHODS: {
     description: "Quantized formats for local AI runners.",
     tooltip:
       "Converts to GGUF for llama.cpp, Ollama, and other local runners. Pick a quantization level below.",
+  },
+  {
+    value: "moe",
+    title: "Dense-to-MoE Upcycle",
+    description: "Converts dense layers into Mixture-of-Experts (.safetensors).",
+    tooltip:
+      "Transforms dense MLP layers into MoE with sparse routing (upcycling / clustering). Saves strictly in .safetensors.",
+    badge: "MoE",
+  },
+  {
+    value: "1bit",
+    title: "1-Bit / 1.58-Bit (BitNet)",
+    description: "BitNet b1.58 ternary {-1, 0, +1} or binary quantization with uint8 bit-packing.",
+    tooltip:
+      "Quantizes weights to 1-bit or 1.58-bit ternary representations with packed storage in .safetensors.",
+    badge: "1.58b",
+  },
+  {
+    value: "neuroplastic",
+    title: "Neuroplastic Synapses",
+    description: "Bio-inspired 4-tuple synaptic weights (S, P, M, E) with STDP & homeostasis.",
+    tooltip:
+      "Exports 2-bit permanent state S, plasticity potential P, stability M, and effective weights in .safetensors.",
+    badge: "Bio",
   },
 ];
 

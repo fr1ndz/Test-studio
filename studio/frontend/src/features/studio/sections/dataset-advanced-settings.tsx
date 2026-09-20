@@ -143,6 +143,12 @@ export function DatasetAdvancedSettings({
                   <SelectItem value="raw">
                     {t("studio.dataset.rawText")}
                   </SelectItem>
+                  <SelectItem value="dpo">DPO (Prompt / Chosen / Rejected)</SelectItem>
+                  <SelectItem value="orpo">ORPO (Pairwise Preference)</SelectItem>
+                  <SelectItem value="grpo">GRPO (Prompt Only)</SelectItem>
+                  <SelectItem value="kto">KTO (Binary Feedback)</SelectItem>
+                  <SelectItem value="prompt_completion">Prompt & Completion</SelectItem>
+                  <SelectItem value="multimodal">Multimodal (Vision & Text)</SelectItem>
                 </SelectContent>
               </Select>
             </div>

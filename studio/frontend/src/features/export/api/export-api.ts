@@ -198,6 +198,59 @@ export async function exportLoRA(params: {
   return parseJson<ExportOperationResponse>(response);
 }
 
+export async function exportMoE(params: {
+  save_directory: string;
+  num_experts?: number;
+  num_experts_per_tok?: number;
+  method?: string;
+  push_to_hub?: boolean;
+  repo_id?: string | null;
+  hf_token?: string | null;
+  private?: boolean;
+}): Promise<ExportOperationResponse> {
+  const response = await authFetch("/api/export/export/moe", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  return parseJson<ExportOperationResponse>(response);
+}
+
+export async function export1Bit(params: {
+  save_directory: string;
+  mode?: string;
+  pack_bits?: boolean;
+  push_to_hub?: boolean;
+  repo_id?: string | null;
+  hf_token?: string | null;
+  private?: boolean;
+}): Promise<ExportOperationResponse> {
+  const response = await authFetch("/api/export/export/1bit", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  return parseJson<ExportOperationResponse>(response);
+}
+
+export async function exportNeuroplastic(params: {
+  save_directory: string;
+  save_states?: boolean;
+  alpha?: number;
+  beta?: number;
+  push_to_hub?: boolean;
+  repo_id?: string | null;
+  hf_token?: string | null;
+  private?: boolean;
+}): Promise<ExportOperationResponse> {
+  const response = await authFetch("/api/export/export/neuroplastic", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  return parseJson<ExportOperationResponse>(response);
+}
+
 export async function cleanupExport(): Promise<ExportOperationResponse> {
   const response = await authFetch("/api/export/cleanup", { method: "POST" });
   return parseJson<ExportOperationResponse>(response);

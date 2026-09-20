@@ -1752,6 +1752,159 @@ class ExportBackend:
             logger.error(traceback.format_exc())
             return False, f"Adapter export failed: {str(e)}", None
 
+    def export_moe(
+        self,
+        save_directory: str,
+        num_experts: int = 8,
+        num_experts_per_tok: int = 2,
+        method: str = "sparse_upcycling",
+        push_to_hub: bool = False,
+        repo_id: Optional[str] = None,
+        hf_token: HfTokenArg = None,
+        private: bool = False,
+    ) -> Tuple[bool, str, Optional[str]]:
+        """Export model upcycled to Mixture-of-Experts (MoE) strictly as .safetensors."""
+        if not self.current_model or not self.current_tokenizer:
+            return False, "No model loaded. Please load a checkpoint first.", None
+
+        output_path = resolve_output_dir(save_directory)
+        ensure_dir(output_path)
+        logger.info(f"Starting Dense-to-MoE upcycling export to: {output_path}")
+
+        try:
+            from unsloth.export_transforms import export_as_moe
+
+            base_model = self.current_model
+            if hasattr(base_model, "merge_and_unload"):
+                base_model = base_model.merge_and_unload()
+
+            export_as_moe(
+                model = base_model,
+                tokenizer = self.current_tokenizer,
+                save_directory = output_path,
+                num_experts = num_experts,
+                num_experts_per_tok = num_experts_per_tok,
+                method = method,
+            )
+
+            if push_to_hub and repo_id:
+                hf_api = HfApi(token = hf_token)
+                repo_id = _open_hub_repo(hf_api, repo_id, private)
+                hf_api.upload_folder(
+                    folder_path = output_path,
+                    repo_id = repo_id,
+                    repo_type = "model",
+                    ignore_patterns = _HUB_UPLOAD_IGNORE,
+                )
+                logger.info(f"MoE model pushed successfully to {repo_id}")
+
+            return True, f"Dense-to-MoE model exported successfully to {output_path}", output_path
+        except Exception as e:
+            logger.error(f"Error exporting MoE model: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return False, f"MoE export failed: {str(e)}", None
+
+    def export_1bit(
+        self,
+        save_directory: str,
+        mode: str = "ternary",
+        pack_bits: bool = True,
+        push_to_hub: bool = False,
+        repo_id: Optional[str] = None,
+        hf_token: HfTokenArg = None,
+        private: bool = False,
+    ) -> Tuple[bool, str, Optional[str]]:
+        """Export model quantized to 1-Bit / 1.58-Bit (BitNet) strictly as .safetensors."""
+        if not self.current_model or not self.current_tokenizer:
+            return False, "No model loaded. Please load a checkpoint first.", None
+
+        output_path = resolve_output_dir(save_directory)
+        ensure_dir(output_path)
+        logger.info(f"Starting 1-Bit ({mode}) export to: {output_path}")
+
+        try:
+            from unsloth.export_transforms import export_as_1bit
+
+            base_model = self.current_model
+            if hasattr(base_model, "merge_and_unload"):
+                base_model = base_model.merge_and_unload()
+
+            export_as_1bit(
+                model = base_model,
+                tokenizer = self.current_tokenizer,
+                save_directory = output_path,
+                mode = mode,
+                pack_bits = pack_bits,
+            )
+
+            if push_to_hub and repo_id:
+                hf_api = HfApi(token = hf_token)
+                repo_id = _open_hub_repo(hf_api, repo_id, private)
+                hf_api.upload_folder(
+                    folder_path = output_path,
+                    repo_id = repo_id,
+                    repo_type = "model",
+                    ignore_patterns = _HUB_UPLOAD_IGNORE,
+                )
+                logger.info(f"1-Bit model pushed successfully to {repo_id}")
+
+            return True, f"1-Bit ({mode}) model exported successfully to {output_path}", output_path
+        except Exception as e:
+            logger.error(f"Error exporting 1-Bit model: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return False, f"1-Bit export failed: {str(e)}", None
+
+    def export_neuroplastic(
+        self,
+        save_directory: str,
+        save_states: bool = True,
+        alpha: float = 0.5,
+        beta: float = 1.5,
+        push_to_hub: bool = False,
+        repo_id: Optional[str] = None,
+        hf_token: HfTokenArg = None,
+        private: bool = False,
+    ) -> Tuple[bool, str, Optional[str]]:
+        """Export bio-inspired neuroplastic weights and states strictly as .safetensors."""
+        if not self.current_model or not self.current_tokenizer:
+            return False, "No model loaded. Please load a checkpoint first.", None
+
+        output_path = resolve_output_dir(save_directory)
+        ensure_dir(output_path)
+        logger.info(f"Starting neuroplastic model export to: {output_path}")
+
+        try:
+            from unsloth.neuroplastic import export_neuroplastic_safetensors
+
+            export_neuroplastic_safetensors(
+                model = self.current_model,
+                save_directory = output_path,
+                tokenizer = self.current_tokenizer,
+                save_states = save_states,
+                alpha = alpha,
+                beta = beta,
+            )
+
+            if push_to_hub and repo_id:
+                hf_api = HfApi(token = hf_token)
+                repo_id = _open_hub_repo(hf_api, repo_id, private)
+                hf_api.upload_folder(
+                    folder_path = output_path,
+                    repo_id = repo_id,
+                    repo_type = "model",
+                    ignore_patterns = _HUB_UPLOAD_IGNORE,
+                )
+                logger.info(f"Neuroplastic model pushed successfully to {repo_id}")
+
+            return True, f"Neuroplastic model exported successfully to {output_path}", output_path
+        except Exception as e:
+            logger.error(f"Error exporting neuroplastic model: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return False, f"Neuroplastic export failed: {str(e)}", None
+
 
 _export_backend = None
 

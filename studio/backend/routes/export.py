@@ -49,6 +49,9 @@ from models import (
     ExportBaseModelRequest,
     ExportGGUFRequest,
     ExportLoRAAdapterRequest,
+    ExportMoERequest,
+    Export1BitRequest,
+    ExportNeuroplasticRequest,
 )
 
 router = APIRouter()
@@ -615,6 +618,140 @@ async def export_lora_adapter(
         raise HTTPException(
             status_code = 500,
             detail = "Failed to export LoRA adapter",
+        )
+
+
+@router.post("/export/moe", response_model = ExportOperationResponse)
+async def export_moe(
+    request: ExportMoERequest,
+    current_subject: str = Depends(get_current_subject),
+    allow_ambient: bool = Depends(allow_ambient_hf_token),
+):
+    """Export model upcycled to Mixture-of-Experts (MoE) strictly in .safetensors format."""
+    validate_job_paths(request.model_dump())
+    try:
+        await _ensure_export_supported()
+        backend = get_export_backend()
+        success, message, output_path = await asyncio.to_thread(
+            backend.export_moe,
+            save_directory = request.save_directory,
+            num_experts = request.num_experts,
+            num_experts_per_tok = request.num_experts_per_tok,
+            method = request.method,
+            push_to_hub = request.push_to_hub,
+            repo_id = request.repo_id,
+            hf_token = _resolve_export_hf_token(
+                request.hf_token,
+                push_to_hub = request.push_to_hub,
+                allow_ambient = allow_ambient,
+            ),
+            private = request.private,
+        )
+
+        if not success:
+            raise HTTPException(status_code = 400, detail = message)
+
+        return ExportOperationResponse(
+            success = True,
+            message = message,
+            details = await asyncio.to_thread(_export_details, output_path, refresh_index = True),
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error exporting MoE model: {e}", exc_info = True)
+        raise HTTPException(
+            status_code = 500,
+            detail = f"Failed to export MoE model: {str(e)}",
+        )
+
+
+@router.post("/export/1bit", response_model = ExportOperationResponse)
+async def export_1bit(
+    request: Export1BitRequest,
+    current_subject: str = Depends(get_current_subject),
+    allow_ambient: bool = Depends(allow_ambient_hf_token),
+):
+    """Export model quantized to 1-Bit / 1.58-Bit (BitNet) strictly in .safetensors format."""
+    validate_job_paths(request.model_dump())
+    try:
+        await _ensure_export_supported()
+        backend = get_export_backend()
+        success, message, output_path = await asyncio.to_thread(
+            backend.export_1bit,
+            save_directory = request.save_directory,
+            mode = request.mode,
+            pack_bits = request.pack_bits,
+            push_to_hub = request.push_to_hub,
+            repo_id = request.repo_id,
+            hf_token = _resolve_export_hf_token(
+                request.hf_token,
+                push_to_hub = request.push_to_hub,
+                allow_ambient = allow_ambient,
+            ),
+            private = request.private,
+        )
+
+        if not success:
+            raise HTTPException(status_code = 400, detail = message)
+
+        return ExportOperationResponse(
+            success = True,
+            message = message,
+            details = await asyncio.to_thread(_export_details, output_path, refresh_index = True),
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error exporting 1-Bit model: {e}", exc_info = True)
+        raise HTTPException(
+            status_code = 500,
+            detail = f"Failed to export 1-Bit model: {str(e)}",
+        )
+
+
+@router.post("/export/neuroplastic", response_model = ExportOperationResponse)
+async def export_neuroplastic(
+    request: ExportNeuroplasticRequest,
+    current_subject: str = Depends(get_current_subject),
+    allow_ambient: bool = Depends(allow_ambient_hf_token),
+):
+    """Export bio-inspired neuroplastic weights and states strictly in .safetensors format."""
+    validate_job_paths(request.model_dump())
+    try:
+        await _ensure_export_supported()
+        backend = get_export_backend()
+        success, message, output_path = await asyncio.to_thread(
+            backend.export_neuroplastic,
+            save_directory = request.save_directory,
+            save_states = request.save_states,
+            alpha = request.alpha,
+            beta = request.beta,
+            push_to_hub = request.push_to_hub,
+            repo_id = request.repo_id,
+            hf_token = _resolve_export_hf_token(
+                request.hf_token,
+                push_to_hub = request.push_to_hub,
+                allow_ambient = allow_ambient,
+            ),
+            private = request.private,
+        )
+
+        if not success:
+            raise HTTPException(status_code = 400, detail = message)
+
+        return ExportOperationResponse(
+            success = True,
+            message = message,
+            details = await asyncio.to_thread(_export_details, output_path, refresh_index = True),
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error exporting neuroplastic model: {e}", exc_info = True)
+        raise HTTPException(
+            status_code = 500,
+            detail = f"Failed to export neuroplastic model: {str(e)}",
         )
 
 

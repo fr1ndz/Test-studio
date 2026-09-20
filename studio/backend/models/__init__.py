@@ -41,6 +41,9 @@ from .export import (
     ExportBaseModelRequest,
     ExportGGUFRequest,
     ExportLoRAAdapterRequest,
+    ExportMoERequest,
+    Export1BitRequest,
+    ExportNeuroplasticRequest,
 )
 from .users import Token
 from .inference import (
