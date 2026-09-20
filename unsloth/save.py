@@ -1000,12 +1000,40 @@ def unsloth_save_model(
         gc.collect()
 
     save_method = save_method.lower().replace(" ", "_")
+
+    if save_method in ("moe", "1bit", "bitnet", "moe_1bit"):
+        from .export_transforms import export_transformed_model, export_as_moe, export_as_1bit
+
+        if hasattr(model, "merge_and_unload"):
+            print("Unsloth: Merging LoRA adapters before export transformation...")
+            model = model.merge_and_unload()
+
+        to_moe = "moe" in save_method
+        to_1bit = "1bit" in save_method or "bitnet" in save_method
+        moe_kwargs = kwargs.get("moe_kwargs", {}) if "kwargs" in locals() else {}
+        bit_kwargs = kwargs.get("bit_kwargs", {}) if "kwargs" in locals() else {}
+
+        print(f"Unsloth: Exporting with transform (to_moe={to_moe}, to_1bit={to_1bit}) -> {save_directory}")
+        return export_transformed_model(
+            model = model,
+            tokenizer = tokenizer,
+            save_directory = save_directory,
+            to_moe = to_moe,
+            to_1bit = to_1bit,
+            moe_kwargs = moe_kwargs,
+            bit_kwargs = bit_kwargs,
+            safe_serialization = safe_serialization,
+        )
+
     if save_method != "lora" and save_method != "merged_16bit" and save_method != "merged_4bit":
         raise RuntimeError(
-            "Unsloth: You must select one of 3 options when saving models:\n"
-            '"lora"         ==> This is the fastest and easiet. Just saves LoRA modules.\n'
-            '"merged_16bit" ==> This merges LoRA weights and saves to float16. Needed for llama.cpp / GGUF.\n'
-            '"merged_4bit"  ==> This merges LoRA weights and saves to 4bit. Useful for DPO / inference.'
+            "Unsloth: You must select a valid option when saving models:\n"
+            '"lora"         ==> Fast. Saves LoRA modules only.\n'
+            '"merged_16bit" ==> Merges LoRA weights and saves to float16 (for GGUF/llama.cpp).\n'
+            '"merged_4bit"  ==> Merges LoRA weights and saves to 4bit.\n'
+            '"moe"          ==> Transforms Dense FFN into MoE (MoEfication / Upcycling).\n'
+            '"1bit"         ==> Quantizes to 1-Bit / 1.58-Bit (BitNet b1.58 ternary / binary).\n'
+            '"moe_1bit"     ==> Upcycles Dense to MoE, then quantizes to 1-Bit / 1.58-Bit.'
         )
 
     if save_method == "merged_4bit":

@@ -576,6 +576,10 @@ from .save import *
 from .chat_templates import *
 from .tokenizer_utils import *
 from .trainer import *
+from .dataset_adapter import *
+from .diffusion_engine import *
+from .export_transforms import *
+from .neuroplastic import *
 
 # Export dataprep utilities for CLI and downstream users
 from .dataprep.raw_text import RawTextDataLoader, TextPreprocessor

@@ -33,7 +33,19 @@ from .loader_utils import (
     resolve_unsloth_device_map,
 )
 
-__all__ = ["FastDiffusionModel", "DIFFUSION_MODEL_TYPES", "is_diffusion_model_type"]
+__all__ = [
+    "FastDiffusionModel",
+    "DIFFUSION_MODEL_TYPES",
+    "is_diffusion_model_type",
+    "DiffusionTrainer",
+    "DiffusionTrainingArguments",
+    "DiffusionSFTTrainer",
+    "DiffusionDPOTrainer",
+    "DiffusionORPOTrainer",
+    "DiffusionGRPOTrainer",
+    "DiffusionKTOTrainer",
+    "UniversalDatasetAdapter",
+]
 
 # transformers model_type strings routed to this slow path.
 DIFFUSION_MODEL_TYPES = ("diffusion_gemma", "diffusion_gemma4")
@@ -394,3 +406,146 @@ class FastDiffusionModel:
         if use_gradient_checkpointing and hasattr(model, "gradient_checkpointing_enable"):
             model.gradient_checkpointing_enable()
         return model
+
+    @staticmethod
+    def prepare_dataset(
+        tokenizer,
+        dataset,
+        method = "sft",
+        max_length = 2048,
+        canvas_block_size = 256,
+        formatting_func = None,
+        num_proc = None,
+        **kwargs,
+    ):
+        """
+        Automatically adapt ANY dataset (HF Dataset, Hub ID, local JSON/JSONL/CSV/Parquet,
+        list of dicts, pandas DataFrame) to the chosen discrete diffusion training method
+        (sft, dpo, orpo, grpo, kto, pretrain).
+        """
+        from ..dataset_adapter import UniversalDatasetAdapter, TrainingMethod
+
+        adapter = UniversalDatasetAdapter(
+            tokenizer = tokenizer,
+            target_method = method,
+            max_length = max_length,
+            canvas_block_size = canvas_block_size,
+            **kwargs,
+        )
+        return adapter.adapt(dataset, formatting_func = formatting_func, num_proc = num_proc)
+
+    @staticmethod
+    def get_trainer(
+        model,
+        tokenizer,
+        train_dataset,
+        eval_dataset = None,
+        method = "sft",
+        training_args = None,
+        data_collator = None,
+        ref_model = None,
+        reward_functions = None,
+        auto_adapt_dataset = True,
+        max_length = 2048,
+        **kwargs,
+    ):
+        """
+        Instantiate a DiffusionTrainer configured for the specified training method
+        (sft, dpo, orpo, grpo, kto, pretrain).
+        """
+        from ..diffusion_trainer import DiffusionTrainer, DiffusionTrainingArguments
+
+        if training_args is None:
+            training_args = DiffusionTrainingArguments(
+                output_dir = kwargs.pop("output_dir", "./diffusion_outputs"),
+                training_method = method,
+                **kwargs,
+            )
+        elif not hasattr(training_args, "training_method"):
+            # Set training_method if standard TrainingArguments was passed
+            setattr(training_args, "training_method", method)
+
+        return DiffusionTrainer(
+            model = model,
+            args = training_args,
+            data_collator = data_collator,
+            train_dataset = train_dataset,
+            eval_dataset = eval_dataset,
+            tokenizer = tokenizer,
+            ref_model = ref_model,
+            reward_functions = reward_functions,
+            auto_adapt_dataset = auto_adapt_dataset,
+            max_length = max_length,
+        )
+
+    @staticmethod
+    def train(
+        model,
+        tokenizer,
+        train_dataset,
+        eval_dataset = None,
+        method = "sft",
+        training_args = None,
+        resume_from_checkpoint = None,
+        **kwargs,
+    ):
+        """
+        End-to-end convenience method to train or fine-tune a discrete diffusion model.
+        Automatically prepares the dataset, configures the trainer, and executes training.
+        """
+        trainer = FastDiffusionModel.get_trainer(
+            model = model,
+            tokenizer = tokenizer,
+            train_dataset = train_dataset,
+            eval_dataset = eval_dataset,
+            method = method,
+            training_args = training_args,
+            **kwargs,
+        )
+        return trainer.train(resume_from_checkpoint = resume_from_checkpoint)
+
+    @staticmethod
+    def export_as_moe(
+        model,
+        tokenizer,
+        save_directory,
+        num_experts = 8,
+        num_experts_per_tok = 2,
+        method = "sparse_upcycling",
+        **kwargs,
+    ):
+        """
+        Transform dense components into MoE architecture and export.
+        """
+        from ..export_transforms import export_as_moe
+        return export_as_moe(
+            model = model,
+            tokenizer = tokenizer,
+            save_directory = save_directory,
+            num_experts = num_experts,
+            num_experts_per_tok = num_experts_per_tok,
+            method = method,
+            **kwargs,
+        )
+
+    @staticmethod
+    def export_as_1bit(
+        model,
+        tokenizer,
+        save_directory,
+        mode = "ternary",
+        pack_bits = True,
+        **kwargs,
+    ):
+        """
+        Quantize model to 1-Bit or 1.58-Bit (BitNet b1.58 ternary / binary) with bit-packing and export.
+        """
+        from ..export_transforms import export_as_1bit
+        return export_as_1bit(
+            model = model,
+            tokenizer = tokenizer,
+            save_directory = save_directory,
+            mode = mode,
+            pack_bits = pack_bits,
+            **kwargs,
+        )

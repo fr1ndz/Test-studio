@@ -51,7 +51,24 @@ __all__ = [
     "UnslothVisionDataCollator",
     "QGaloreConfig",
     "check_dataset_for_missing_videos",
+    "DiffusionTrainingArguments",
+    "DiffusionTrainer",
+    "DiffusionSFTTrainer",
+    "DiffusionDPOTrainer",
+    "DiffusionORPOTrainer",
+    "DiffusionGRPOTrainer",
+    "DiffusionKTOTrainer",
 ]
+
+from .diffusion_trainer import (
+    DiffusionTrainingArguments,
+    DiffusionTrainer,
+    DiffusionSFTTrainer,
+    DiffusionDPOTrainer,
+    DiffusionORPOTrainer,
+    DiffusionGRPOTrainer,
+    DiffusionKTOTrainer,
+)
 
 logger = logging.getLogger(__name__)
 
