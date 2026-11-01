@@ -110,7 +110,7 @@ jobs:
           fetch-depth: 0  # drift check needs git status / diff
           persist-credentials: false
 
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
         with:
           python-version: '3.12'
 
@@ -239,7 +239,7 @@ jobs:
           ref: ${{ env.NOTEBOOKS_REF }}
           path: notebooks
           persist-credentials: false
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
         with: { python-version: '3.12' }
       - name: Install
         # packaging is not in a bare setup-python environment, and _requirement_applies
@@ -310,7 +310,7 @@ jobs:
           ref: ${{ env.NOTEBOOKS_REF }}
           path: notebooks
           persist-credentials: false
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
         # This job pins its dependencies inline below rather than in a requirements
         # file, so the workflow IS the dependency spec and hashing it is what makes the
         # key describe the payload. Unscoped, setup-python hashes dependency files
@@ -465,7 +465,7 @@ jobs:
       # runner ever since. `python_version` in the mapping is the snapshot's own
       # record of that, and the seed step below fails loudly if the two drift
       # apart again rather than letting one pin resolve short.
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
         with: { python-version: '3.13' }
 
       - name: Restore the pip cache
