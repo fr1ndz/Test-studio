@@ -67,7 +67,7 @@ jobs:
       ARCH: ARM64
     steps:
       - name: Harden runner (audit)
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1  # v2.21.1
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2  # v2.22.2
         with:
           egress-policy: audit
 
@@ -129,7 +129,7 @@ jobs:
           Set-Content $bat -Value $b -Encoding ascii
           if (-not (Test-Path "$vs\VC\Auxiliary\Build\vcvarsarm64.bat")) { throw "no vcvarsarm64.bat under $vs" }
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@v7.1.0
         with:
           python-version: ${{ matrix.python }}
           architecture: arm64
@@ -272,7 +272,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Harden runner (audit)
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1  # v2.21.1
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2  # v2.22.2
         with:
           egress-policy: audit
 
@@ -290,7 +290,7 @@ jobs:
             .github/scripts
           sparse-checkout-cone-mode: false
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@v7.1.0
         with:
           python-version: '3.13'
           architecture: arm64
@@ -407,7 +407,7 @@ jobs:
     environment: release-signing
     steps:
       - name: Harden runner (audit)
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1  # v2.21.1
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2  # v2.22.2
         with:
           egress-policy: audit
 
@@ -583,7 +583,7 @@ jobs:
       contents: write
     steps:
       - name: Harden runner (audit)
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1  # v2.21.1
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2  # v2.22.2
         with:
           egress-policy: audit
 

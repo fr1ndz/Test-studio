@@ -660,13 +660,13 @@ jobs:
           bash .github/scripts/retry-with-apt-lock.sh sudo sh -c \
             'apt-get install -y -qq libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev libxdo-dev libssl-dev patchelf xdg-utils fonts-noto-color-emoji gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav || { apt-get update -qq && apt-get install -y -qq libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev libxdo-dev libssl-dev patchelf xdg-utils fonts-noto-color-emoji gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav; }'
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
         with:
           node-version: 24
 
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8  # stable @ 2026-03-27
 
-      - uses: swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6  # v2.9.2
+      - uses: swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0  # v2.9.3
         with:
           save-if: false
           workspaces: 'studio/src-tauri -> target'

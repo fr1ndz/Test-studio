@@ -86,7 +86,7 @@ jobs:
             secret_name: KAGGLE_API_TOKEN_2
     steps:
       - name: Harden runner (audit)
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2
         with:
           egress-policy: audit
 
@@ -96,7 +96,7 @@ jobs:
           # GH_TOKEN, and checkout persists the job token into .git by default.
           persist-credentials: false
 
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
         with:
           python-version: '3.12'
 
